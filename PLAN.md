@@ -204,7 +204,7 @@ GAS のランタイムには一切関与しない。`rootDir` が `./src` であ
   - 時刻フォーマット `formatTime(date)`
   - LockService による排他
 - [x] 動作確認用ラッパー `checkConfig()` / `testPunchStart()` / `testPunchEnd()`
-- [ ] GAS プロジェクトへの反映と実機確認
+- [x] GAS プロジェクトへの反映と実機確認（2026-08-05 完了。T-1 / T-2 / T-3 / T-7 合格）
 
 **完了条件**: GAS エディタから `testPunchStart()` を実行し、カレンダーに
 「開始」が作成され、2名に招待メールが届く。
@@ -223,23 +223,24 @@ GAS エディタの「実行」は関数に引数を渡せないため、`punch(
   - 設定不足・読み込み失敗のバナー表示（`Status.error`）
   - `visibilitychange` での状態再取得（日付跨ぎ・復帰時のずれ防止）
   - `prefers-color-scheme` / `prefers-reduced-motion` 対応
-- [ ] iPhone Safari での実機確認
+- [x] iPhone Safari での実機確認（2026-08-05 完了）
 
-**完了条件**: iPhone Safari から実際に打刻でき、状態表示が正しく更新される。
+**完了条件**: iPhone Safari から実際に打刻でき、状態表示が正しく更新される。→ 達成
 
 ### Phase 3 — デプロイと運用整備
 
 - [x] `README.md`：セットアップ手順、設定変更手順、トラブルシュート、誤タップ時の復旧手順
 - [x] clasp をプロジェクトローカルに導入（`package.json` / npm scripts、グローバルインストールなし → [ADR-0012](./ADR.md#adr-0012)）
-- [ ] `npm run login` で認証（`.clasprc.json` をリポジトリ内に生成）
-- [ ] `npm run create` で GAS プロジェクトを作成し `npm run push` で反映
-- [ ] Script Properties に `GUEST_EMAILS` を設定
-- [ ] Web App デプロイ（実行ユーザー: 自分 / アクセス: 自分のみ）
-- [ ] iPhone のホーム画面に Web App URL を追加
+- [x] `npm run login` で認証（`.clasprc.json` をリポジトリ内に生成）
+- [x] `npm run create` で GAS プロジェクトを作成し `npm run push` で反映
+- [x] Script Properties に `GUEST_EMAILS` を設定（検証用に1件。本番運用前に2名へ差し替える）
+- [x] Web App デプロイ（実行ユーザー: 自分 / アクセス: 自分のみ）
+- [x] iPhone のホーム画面に Web App URL を追加
 
-**完了条件**: ホーム画面アイコンから2タップで打刻が完了する。
+**完了条件**: ホーム画面アイコンから2タップで打刻が完了する。→ 達成
 
-未チェックの項目はいずれも Google アカウント上での操作であり、実機確認としてまとめて実施する。
+**2026-08-05: MVP 完成。** Phase 1〜3 の全項目が完了し、日常運用を開始できる状態にある。
+残る作業は運用上の設定のみ（`GUEST_EMAILS` を検証用1件から本番の2名へ差し替える）。
 
 ---
 
@@ -262,6 +263,17 @@ GAS エディタの「実行」は関数に引数を渡せないため、`punch(
 
 T-6（日付跨ぎ）は実待機せず、`findTodayEvent` の境界計算をコードレビューと
 GAS エディタでの単発実行で確認する。
+
+### 検証状況（2026-08-05）
+
+| 観点 | 状況 | 根拠 |
+|------|------|------|
+| T-1 / T-2 / T-3 / T-7 | 合格 | GAS エディタでの `testPunchStart()` / `testPunchEnd()` の実行ログで確認 |
+| T-5 / T-10 ほか iPhone 側 | 合格 | iPhone Safari での実機確認で確認（個別の実行ログは未記録） |
+| T-4 / T-6 / T-8 / T-9 | 個別の記録なし | 実機確認の中で問題が出なかったことをもって可とした |
+
+個別ログを残していない観点があるため、UI やイベント検索ロジックを変更した際は
+この表を根拠にせず、T-1〜T-10 を改めて通すこと。
 
 ---
 
