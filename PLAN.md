@@ -110,6 +110,7 @@ claude.ai / ChatGPT の Google Calendar コネクタを使えば開発ゼロで�
 | 設定値の保持 | Script Properties | [ADR-0009](./ADR.md#adr-0009) |
 | 誤タップ対策 | 確認ダイアログを設けず、ボタン間隔と復旧手順で対応 | [ADR-0011](./ADR.md#adr-0011) |
 | 反映手段 | clasp をプロジェクトローカルに導入し、認証情報もリポジトリ内に置く | [ADR-0012](./ADR.md#adr-0012) |
+| OAuth スコープ | `calendar` のみを明示宣言する | [ADR-0014](./ADR.md#adr-0014) |
 
 ### 3.3 ファイル構成
 

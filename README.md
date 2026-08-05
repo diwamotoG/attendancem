@@ -29,17 +29,60 @@ src/
 
 ### 1. GAS プロジェクトを作る
 
-**clasp を使う場合**
+**clasp を使う場合（推奨）**
+
+clasp はグローバルにインストールしない。プロジェクト内に閉じ込める（[ADR-0012](./ADR.md#adr-0012)）。
 
 ```bash
-npm install -g @google/clasp
-clasp login
-clasp create --type standalone --title attendancem --rootDir ./src
-clasp push
+npm install          # node_modules/ に clasp を導入する
+npm run login        # ブラウザが開く。認証情報は ./.clasprc.json に保存される
+npm run create       # GAS プロジェクトを作成する（.clasp.json が生成される）
+npm run push         # src/ の4ファイルを反映する
 ```
 
-`clasp create` がひな形ファイルを生成した場合は削除してから `clasp push` する
+`npm run create` は事前に [Apps Script API の有効化](https://script.google.com/home/usersettings)
+（「Google Apps Script API」を ON）が必要。OFF のままだとエラーになる。
+
+> **⚠️ `create` は `src/appsscript.json` を上書きする**
+>
+> `clasp create` は新規プロジェクトのひな形マニフェストを `rootDir` に clone するため、
+> **既存の `src/appsscript.json` が `America/New_York` の既定値で潰される**
+> （`Cloned one file..` と表示されたらこれが起きている）。
+> そのまま `push` すると ADR-0007（Asia/Tokyo 固定）と ADR-0002（Web App のアクセス設定）が
+> 両方とも失われる。
+>
+> `create` の直後に `src/appsscript.json` を確認し、`timeZone` が `Asia/Tokyo` で
+> `webapp` ブロックがあることを必ず検証してから `push` する。
+> 潰されていたら復元してから `npm run push -- --force`（マニフェストの上書きには `--force` が要る）。
+>
+> ```bash
+> git checkout HEAD -- src/appsscript.json   # 潰される前にコミットしてあれば一発で戻る
+> npm run push -- --force
+> ```
+>
+> **`create` の前にコミットしておくこと。** これが最も確実な保険になる（[ADR-0014](./ADR.md#adr-0014)）。
+
+`create` がその他のひな形ファイルを生成した場合は削除してから `push` する
 （`src/` の4ファイルだけが残る状態にする）。
+
+以降の反映は `npm run push` だけでよい。他のコマンドは `npm run clasp -- <サブコマンド>` で叩く。
+
+| コマンド | 内容 |
+|---------|------|
+| `npm run push` | `src/` を GAS に反映 |
+| `npm run status` | push 対象のファイル一覧を確認 |
+| `npm run open` | GAS エディタをブラウザで開く |
+| `npm run whoami` | 現在の認証状態を確認 |
+| `npm run logout` | `.clasprc.json` を破棄 |
+
+**撤去したくなったら**
+
+```bash
+npm run logout
+rm -rf node_modules package-lock.json .clasprc.json .clasp.json
+```
+
+グローバル環境には何も残らない。
 
 **エディタに手で貼る場合**
 
