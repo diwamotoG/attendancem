@@ -7,9 +7,13 @@ Google Apps Script の Web App として動作する。サーバー不要・費�
 
 | ドキュメント | 内容 |
 |-------------|------|
+| [SETUP.md](./SETUP.md) | **AI Agent 向け**セットアップ手順書（検証ゲート付き） |
 | [PLAN.md](./PLAN.md) | 要件・仕様・実装計画 |
 | [ADR.md](./ADR.md) | 設計上・実装上の意思決定記録 |
 | [CLAUDE.md](./CLAUDE.md) | ドキュメント同期の開発ルール |
+
+AI Agent にセットアップを任せる場合は、[SETUP.md](./SETUP.md) を読ませる。
+人間が手で進める場合は以下を読む。
 
 ---
 
@@ -34,33 +38,34 @@ src/
 clasp はグローバルにインストールしない。プロジェクト内に閉じ込める（[ADR-0012](./ADR.md#adr-0012)）。
 
 ```bash
-npm install          # node_modules/ に clasp を導入する
-npm run login        # ブラウザが開く。認証情報は ./.clasprc.json に保存される
-npm run create       # GAS プロジェクトを作成する（.clasp.json が生成される）
-npm run push         # src/ の4ファイルを反映する
+npm install                # node_modules/ に clasp を導入する
+npm run login              # ブラウザが開く。認証情報は ./.clasprc.json に保存される
+npm run create             # GAS プロジェクトを作成する（.clasp.json が生成される）
+# → .clasp.json の "rootDir" を ".gas-init" から "src" に書き換え、rm -rf .gas-init
+npm run push -- --force    # src/ の4ファイルを反映する
 ```
 
 `npm run create` は事前に [Apps Script API の有効化](https://script.google.com/home/usersettings)
 （「Google Apps Script API」を ON）が必要。OFF のままだとエラーになる。
 
-> **⚠️ `create` は `src/appsscript.json` を上書きする**
+> **⚠️ なぜ `create` の後に `rootDir` を書き換えるのか**
 >
-> `clasp create` は新規プロジェクトのひな形マニフェストを `rootDir` に clone するため、
-> **既存の `src/appsscript.json` が `America/New_York` の既定値で潰される**
-> （`Cloned one file..` と表示されたらこれが起きている）。
-> そのまま `push` すると ADR-0007（Asia/Tokyo 固定）と ADR-0002（Web App のアクセス設定）が
-> 両方とも失われる。
+> `clasp create` はひな形マニフェストを `rootDir` に clone する。`--rootDir ./src` を
+> 指定すると **既存の `src/appsscript.json` が `America/New_York` の既定値で潰され**、
+> そのまま push すると ADR-0007（Asia/Tokyo 固定）と ADR-0002（自分のみアクセス）が
+> 両方とも失われる。2026-08-05 に実際に起きた事故である。
 >
-> `create` の直後に `src/appsscript.json` を確認し、`timeZone` が `Asia/Tokyo` で
-> `webapp` ブロックがあることを必ず検証してから `push` する。
-> 潰されていたら復元してから `npm run push -- --force`（マニフェストの上書きには `--force` が要る）。
+> そのため `npm run create` は clone 先を捨てディレクトリ `.gas-init` に向けてある
+> （[ADR-0015](./ADR.md#adr-0015)）。`src/` には触れないので、後から `rootDir` を
+> `src` に戻せばよい。**`--rootDir ./src` に書き換えないこと。**
+>
+> push の前に `src/appsscript.json` を必ず確認する。`timeZone` が `Asia/Tokyo` で、
+> `webapp` と `oauthScopes` があること。潰れていたら復元してから push する。
 >
 > ```bash
-> git checkout HEAD -- src/appsscript.json   # 潰される前にコミットしてあれば一発で戻る
-> npm run push -- --force
+> git checkout HEAD -- src/appsscript.json   # コミットしてあれば一発で戻る
+> npm run push -- --force                    # マニフェストの上書きには --force が要る
 > ```
->
-> **`create` の前にコミットしておくこと。** これが最も確実な保険になる（[ADR-0014](./ADR.md#adr-0014)）。
 
 `create` がその他のひな形ファイルを生成した場合は削除してから `push` する
 （`src/` の4ファイルだけが残る状態にする）。

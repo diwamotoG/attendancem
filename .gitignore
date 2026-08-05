@@ -5,5 +5,8 @@ node_modules/
 .clasp.json
 .clasprc.json
 
+# clasp create のひな形 clone 先（捨てディレクトリ。SETUP.md ステップ4）
+.gas-init/
+
 # Claude Code の個人設定（.claude/settings.json は共有する）
 .claude/settings.local.json

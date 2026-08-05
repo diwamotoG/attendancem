@@ -111,6 +111,7 @@ claude.ai / ChatGPT の Google Calendar コネクタを使えば開発ゼロで�
 | 誤タップ対策 | 確認ダイアログを設けず、ボタン間隔と復旧手順で対応 | [ADR-0011](./ADR.md#adr-0011) |
 | 反映手段 | clasp をプロジェクトローカルに導入し、認証情報もリポジトリ内に置く | [ADR-0012](./ADR.md#adr-0012) |
 | OAuth スコープ | `calendar` のみを明示宣言する | [ADR-0014](./ADR.md#adr-0014) |
+| セットアップ手順 | AI Agent 向けに SETUP.md を用意し、マニフェスト上書きを回避で防ぐ | [ADR-0015](./ADR.md#adr-0015) |
 
 ### 3.3 ファイル構成
 
@@ -118,9 +119,11 @@ claude.ai / ChatGPT の Google Calendar コネクタを使えば開発ゼロで�
 attendancem/
 ├── PLAN.md            # 本ドキュメント
 ├── ADR.md             # アーキテクチャ決定記録
-├── README.md          # セットアップ・デプロイ手順・トラブルシュート
+├── README.md          # 人間向けのセットアップ・デプロイ手順・トラブルシュート
+├── SETUP.md           # AI Agent 向けセットアップ手順書（→ ADR-0015）
 ├── CLAUDE.md          # ドキュメント同期の開発ルール
 ├── .gitignore
+├── .gas-init/         # clasp create のひな形 clone 先。作成後に削除する（→ ADR-0015）
 ├── package.json       # clasp をローカル導入するためだけの定義（→ ADR-0012）
 ├── package-lock.json
 ├── node_modules/      # clasp 本体。コミットしない

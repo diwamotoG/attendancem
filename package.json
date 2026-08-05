@@ -8,7 +8,7 @@
     "login": "clasp --auth .clasprc.json login",
     "logout": "clasp --auth .clasprc.json logout",
     "whoami": "clasp --auth .clasprc.json show-authorized-user",
-    "create": "clasp --auth .clasprc.json create-script --type standalone --title attendancem --rootDir ./src",
+    "create": "clasp --auth .clasprc.json create-script --type standalone --title attendancem --rootDir ./.gas-init",
     "status": "clasp --auth .clasprc.json show-file-status",
     "push": "clasp --auth .clasprc.json push",
     "pull": "clasp --auth .clasprc.json pull",
