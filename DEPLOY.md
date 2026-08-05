@@ -154,7 +154,8 @@ git revert <コミット>       # 履歴を残して打ち消す
 | 変更 | 必要な操作 |
 |------|-----------|
 | 招待先を変える（`GUEST_EMAILS`） | **スクリプト プロパティを書き換えるだけ。デプロイ不要**（[ADR-0009](./ADR.md#adr-0009)） |
-| 招待メールを止める（`SEND_INVITES`） | `src/Config.gs` の変更 → 手順3〜5が必要 |
+| 招待メールを止める（`PUNCH_TYPES[type].sendInvites`） | `src/Config.gs` の変更 → 手順3〜5が必要。単一フラグ `SEND_INVITES` は廃止済み（[ADR-0020](./ADR.md#adr-0020)） |
+| 連打しきい値・状態導出の窓（`MIN_PUNCH_INTERVAL_MS` / `STATE_LOOKBACK_DAYS`） | `src/Config.gs` の変更 → 手順3〜5が必要 |
 | タイムゾーン・アクセス範囲 | `src/appsscript.json` の変更 → 手順3〜5が必要。`--force` 必須 |
 
 招待先の変更にデプロイが要らないのは、設定値をコードではなく

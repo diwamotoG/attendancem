@@ -279,28 +279,65 @@ Gmail・ドライブなどが並んでいたらマニフェストの宣言と食
 期待するログ:
 
 ```json
-{ "date": "YYYY-MM-DD", "start": null, "end": null,
+{ "date": "YYYY-MM-DD", "punches": [], "state": "offDuty",
+  "allowed": ["officeIn", "remoteIn"],
   "guests": ["1人目@gmail.com", "2人目@gmail.com"], "error": null }
 ```
 
 `error` が `null` で `guests` が2件揃うこと。
+当日の打刻がまだ無ければ `punches` は空配列、`state` は `offDuty` になる。
 
-### 7-2. `testPunchStart()` / `testPunchEnd()`
+### 7-2. `testTransitions()`
 
-> ⚠️ **実行するとカレンダーに予定が作られ、招待先2名に実際にメールが届く。**
+勤務状態の遷移表を検証する自動テスト（[ADR-0021](./ADR.md#adr-0021)）。
+**カレンダーにも招待メールにも一切触れない**ため、打刻を試す前に通しておく。
+
+期待するログ:
+
+```
+testTransitions: 31/31 件合格、失敗 0 件
+```
+
+`失敗 0 件` でなければ次へ進まない。`NG` 行に期待値と実際値が出るので、
+PLAN.md §2.4 の遷移表と `Config.gs` の `PUNCH_TYPES`（`from` / `to`）の
+どちらが食い違っているかを報告すること。
+
+### 7-3. 打刻のラッパー関数
+
+> ⚠️ **実行するとカレンダーに予定が作られ、出社・退社は招待先2名に実際にメールが届く。**
 > `GUEST_EMAILS` にプレースホルダ（`a@gmail.com` など実在する他人のアドレス）が
 > 入っていないか、実行前に必ず確認すること。
 
-| 関数 | 期待結果 |
-|------|---------|
-| `testPunchStart()` | カレンダーに `開始` が現在時刻で作成、2名に招待メール |
-| `testPunchEnd()` | カレンダーに `終了` が作成、2名に招待メール |
+**この順に実行する。順序に意味がある。**
 
-引数付きの `punch('start')` はエディタから直接実行できないため、
+| # | 関数 | 期待結果 |
+|---|------|---------|
+| 1 | `testPunchOfficeIn()` | `リアル出社` が現在時刻で作成、2名に招待メール |
+| 2 | `testPunchBreakIn()` | `休憩開始` が作成。**招待メールは届かない** |
+| 3 | `testPunchBreakOut()` | `休憩終了` が作成。招待メールは届かない |
+| 4 | `testPunchOfficeOut()` | `リアル退社` が作成、2名に招待メール |
+
+`testPunchRemoteIn()` / `testPunchRemoteOut()` も同じ要領で確認できる
+（それぞれ `リモート出社` / `リモート退社` が作成され、2名に招待メールが届く）。
+引数付きの `punch('officeIn')` はエディタから直接実行できないため、
 ラッパー関数を使う（PLAN.md §5 Phase 1）。
 
-**検証**: 作成された予定の時刻が JST でずれていないこと（ADR-0007）。
-ずれている場合は `src/appsscript.json` の `timeZone` を疑う。
+**2つの制約に注意すること。** どちらも仕様であり、故障ではない。
+
+- **順序**: 勤務外の状態で `testPunchOfficeOut()` を実行しても、
+  状態遷移チェックに弾かれて `ok: false` が返りイベントは作成されない
+  （[ADR-0018](./ADR.md#adr-0018)）。上の表の順に実行する
+- **間隔**: 各実行の間を**1分以上あける**。直前の打刻から1分未満は種別を問わず
+  拒否される（[ADR-0019](./ADR.md#adr-0019)）。連続実行すると
+  `直前の打刻から1分経過していません` が返る
+
+**検証**:
+
+- 作成された予定の時刻が JST でずれていないこと（ADR-0007）。
+  ずれている場合は `src/appsscript.json` の `timeZone` を疑う
+- **2の直後に招待先の受信箱を確認し、休憩のメールが届いていないこと。**
+  `sendInvites: false` はカレンダーへの表示を残すため、
+  カレンダー側だけを見ても抑止できているか判断できない（[ADR-0020](./ADR.md#adr-0020)）
 
 確認で作成した予定は、カレンダーから削除しておくようユーザーに伝える。
 
@@ -340,7 +377,9 @@ Gmail・ドライブなどが並んでいたらマニフェストの宣言と食
 - [ ] `src/appsscript.json` が `Asia/Tokyo` / `webapp` / `oauthScopes` の3点を保持
 - [ ] GAS 側のマニフェストがローカルと一致
 - [ ] `checkConfig()` が `error: null`、`guests` 2件
-- [ ] `testPunchStart()` / `testPunchEnd()` でカレンダーに予定と招待メール
+- [ ] `testTransitions()` が `失敗 0 件`
+- [ ] `testPunchOfficeIn()` / `testPunchOfficeOut()` でカレンダーに予定と招待メール
+- [ ] `testPunchBreakIn()` / `testPunchBreakOut()` でカレンダーに予定。**招待メールは届かない**
 - [ ] Web App が「自分として実行 / 自分のみアクセス」でデプロイ済み
 - [ ] ホーム画面から2タップで打刻できる
 
