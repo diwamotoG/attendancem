@@ -226,13 +226,18 @@ TMP=$(mktemp -d)
 SCRIPT_ID=$(node -p "require('./.clasp.json').scriptId")
 cat > "$TMP/verify.clasp.json" <<EOF
 { "scriptId": "$SCRIPT_ID", "rootDir": "$TMP/remote",
-  "scriptExtensions": [".js", ".gs"], "htmlExtensions": [".html"],
+  "scriptExtensions": [".gs", ".js"], "htmlExtensions": [".html"],
   "jsonExtensions": [".json"], "filePushOrder": [], "skipSubdirectories": false }
 EOF
 npx clasp -A ./.clasprc.json -P "$TMP/verify.clasp.json" pull >/dev/null
-diff src/appsscript.json "$TMP/remote/appsscript.json" && echo "✅ GAS 側と一致"
+for f in appsscript.json Code.gs Config.gs index.html; do
+  diff -q "src/$f" "$TMP/remote/$f" >/dev/null && echo "✅ $f 一致" || echo "❌ $f 不一致"
+done
 rm -rf "$TMP"
 ```
+
+`scriptExtensions` は **`.gs` を先に並べること。** `.js` を先にすると clasp が
+`Code.js` という名前で pull し、`src/Code.gs` との差分が取れずに「不一致」に見える。
 
 `✅ GAS 側と一致` が出ればステップ4〜5は完了。
 
