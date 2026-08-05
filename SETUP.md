@@ -30,12 +30,23 @@ Agent はそこで作業を止め、ユーザーに依頼して結果を待つ�
 
 ## ステップ 0 — 前提の確認
 
+リポジトリを取得する（未取得の場合）。
+
+```bash
+git clone git@github.com:diwamotoG/attendancem.git
+cd attendancem
+```
+
 ```bash
 node -v    # v18 以上であること
 npm -v
 ```
 
-リポジトリのルート（`PLAN.md` と `src/` がある階層）で作業する。
+以降はリポジトリのルート（`PLAN.md` と `src/` がある階層）で作業する。
+
+**このリポジトリを fork / clone した場合、GAS プロジェクトは各自で新規作成する。**
+`.clasp.json`（scriptId）と `.clasprc.json`（認証情報）は `.gitignore` 済みで
+リポジトリに含まれないため、ステップ3・4を必ず実施すること。
 
 **検証**: `src/` に `appsscript.json` / `Code.gs` / `Config.gs` / `index.html` の4ファイルがあること。
 
