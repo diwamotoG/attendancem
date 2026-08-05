@@ -1,0 +1,9 @@
+.DS_Store
+node_modules/
+
+# clasp: GAS プロジェクト ID は環境依存のため共有しない
+.clasp.json
+.clasprc.json
+
+# Claude Code の個人設定（.claude/settings.json は共有する）
+.claude/settings.local.json

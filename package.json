@@ -1,0 +1,22 @@
+{
+  "name": "attendancem",
+  "version": "1.0.0",
+  "private": true,
+  "description": "勤怠打刻ツール（Google Apps Script Web App）の開発用ツールチェイン。GAS の実行時には使わない",
+  "scripts": {
+    "clasp": "clasp --auth .clasprc.json",
+    "login": "clasp --auth .clasprc.json login",
+    "logout": "clasp --auth .clasprc.json logout",
+    "whoami": "clasp --auth .clasprc.json show-authorized-user",
+    "create": "clasp --auth .clasprc.json create-script --type standalone --title attendancem --rootDir ./src",
+    "status": "clasp --auth .clasprc.json show-file-status",
+    "push": "clasp --auth .clasprc.json push",
+    "pull": "clasp --auth .clasprc.json pull",
+    "open": "clasp --auth .clasprc.json open-script",
+    "deploy": "clasp --auth .clasprc.json create-deployment",
+    "deployments": "clasp --auth .clasprc.json list-deployments"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.3.0"
+  }
+}

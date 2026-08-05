@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <base target="_top" />
+    <!--
+      meta タグは HtmlService に除去されるため、viewport は Code.gs の
+      addMetaTag() で付与している。ここに書いても効かない。
+    -->
+    <style>
+      :root {
+        --bg: #f5f5f7;
+        --card: #ffffff;
+        --fg: #1c1c1e;
+        --fg-dim: #6e6e73;
+        --line: #e0e0e5;
+        --start: #0a7d3e;
+        --start-fg: #ffffff;
+        --end: #b3261e;
+        --end-fg: #ffffff;
+        --disabled: #d8d8dd;
+        --disabled-fg: #9a9aa0;
+        --ok: #0a7d3e;
+        --ng: #b3261e;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1c1c1e;
+          --card: #2c2c2e;
+          --fg: #f2f2f7;
+          --fg-dim: #98989f;
+          --line: #3a3a3c;
+          --start: #2f9e5c;
+          --end: #e5534b;
+          --disabled: #3a3a3c;
+          --disabled-fg: #6e6e73;
+          --ok: #2f9e5c;
+          --ng: #e5534b;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px 16px 40px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+          "Noto Sans JP", sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      .wrap {
+        max-width: 480px;
+        margin: 0 auto;
+      }
+
+      .date {
+        text-align: center;
+        font-size: 15px;
+        color: var(--fg-dim);
+        margin-bottom: 16px;
+      }
+
+      /* --- 当日の打刻状況 --- */
+      .status {
+        background: var(--card);
+        border-radius: 14px;
+        padding: 4px 18px;
+        margin-bottom: 28px;
+      }
+
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .status-row:last-child {
+        border-bottom: none;
+      }
+
+      .status-label {
+        font-size: 16px;
+        color: var(--fg-dim);
+      }
+
+      .status-time {
+        font-size: 26px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .status-time.empty {
+        color: var(--disabled-fg);
+        font-weight: 400;
+      }
+
+      /* --- 打刻ボタン ---
+         ADR-0011: 確認ダイアログを挟まない代わりに、誤タップを避けるため
+         2つのボタンの間に大きな余白を取る。 */
+      .buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      button.punch {
+        width: 100%;
+        min-height: 88px;
+        border: none;
+        border-radius: 16px;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #fff;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: transform 0.08s ease, opacity 0.15s ease;
+      }
+
+      button.punch:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+
+      button.punch:disabled {
+        background: var(--disabled) !important;
+        color: var(--disabled-fg) !important;
+        cursor: default;
+      }
+
+      #btn-start {
+        background: var(--start);
+      }
+
+      #btn-end {
+        background: var(--end);
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        margin-right: 10px;
+        vertical-align: -3px;
+        border: 3px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      button.punch:disabled .spinner {
+        border-color: rgba(0, 0, 0, 0.15);
+        border-top-color: var(--disabled-fg);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 2s;
+        }
+        button.punch:active:not(:disabled) {
+          transform: none;
+        }
+      }
+
+      /* --- 設定・エラー --- */
+      .guests {
+        margin-top: 28px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--fg-dim);
+        line-height: 1.7;
+        word-break: break-all;
+      }
+
+      .banner {
+        display: none;
+        background: var(--ng);
+        color: #fff;
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+
+      .banner.show {
+        display: block;
+      }
+
+      /* --- トースト --- */
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 28px;
+        transform: translate(-50%, 20px);
+        max-width: min(440px, calc(100vw - 32px));
+        padding: 14px 20px;
+        border-radius: 12px;
+        color: #fff;
+        font-size: 15px;
+        line-height: 1.6;
+        text-align: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      .toast.ok {
+        background: var(--ok);
+      }
+
+      .toast.ng {
+        background: var(--ng);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <div class="date" id="date">読み込み中…</div>
+
+      <div class="banner" id="banner" role="alert"></div>
+
+      <div class="status">
+        <div class="status-row">
+          <span class="status-label">開始</span>
+          <span class="status-time empty" id="time-start">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">終了</span>
+          <span class="status-time empty" id="time-end">—</span>
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button class="punch" id="btn-start" type="button" disabled>開始</button>
+        <button class="punch" id="btn-end" type="button" disabled>終了</button>
+      </div>
+
+      <div class="guests" id="guests"></div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      /**
+       * クライアントロジック。
+       * サーバー呼び出しは google.script.run のみ（ADR-0005）。
+       * 二重打刻の真の防壁はサーバー側にあり（ADR-0006）、
+       * ここでの非活性化は多層防御の一層目にすぎない。
+       */
+
+      var el = {
+        date: document.getElementById('date'),
+        banner: document.getElementById('banner'),
+        timeStart: document.getElementById('time-start'),
+        timeEnd: document.getElementById('time-end'),
+        btnStart: document.getElementById('btn-start'),
+        btnEnd: document.getElementById('btn-end'),
+        guests: document.getElementById('guests'),
+        toast: document.getElementById('toast')
+      };
+
+      var busy = false;
+      var lastStatus = null;
+      var toastTimer = null;
+
+      /**
+       * google.script.run をコールバックから Promise に包む。
+       * 引数なしのサーバー関数に undefined を渡すと google.script.run が
+       * 引数を直列化できずに失敗するため、arg の有無で呼び分ける。
+       */
+      function call(fnName, arg) {
+        return new Promise(function (resolve, reject) {
+          var runner = google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject);
+          if (arg === undefined) {
+            runner[fnName]();
+          } else {
+            runner[fnName](arg);
+          }
+        });
+      }
+
+      function toast(message, kind) {
+        clearTimeout(toastTimer);
+        el.toast.textContent = message;
+        el.toast.className = 'toast show ' + kind;
+        toastTimer = setTimeout(function () {
+          el.toast.className = 'toast ' + kind;
+        }, 4500);
+      }
+
+      function formatDate(iso) {
+        var p = String(iso || '').split('-');
+        if (p.length !== 3) return '';
+        var days = ['日', '月', '火', '水', '木', '金', '土'];
+        var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        return p[0] + '年' + Number(p[1]) + '月' + Number(p[2]) + '日（' +
+          days[d.getDay()] + '）';
+      }
+
+      function render(status) {
+        lastStatus = status;
+        el.date.textContent = formatDate(status.date);
+
+        setTime(el.timeStart, status.start);
+        setTime(el.timeEnd, status.end);
+
+        if (status.error) {
+          el.banner.textContent = status.error;
+          el.banner.classList.add('show');
+        } else {
+          el.banner.classList.remove('show');
+        }
+
+        el.guests.textContent = status.guests && status.guests.length
+          ? '招待先: ' + status.guests.join(' / ')
+          : '';
+
+        updateButtons();
+      }
+
+      function setTime(node, value) {
+        node.textContent = value || '—';
+        node.classList.toggle('empty', !value);
+      }
+
+      function updateButtons() {
+        var s = lastStatus;
+        var blocked = busy || !s || !!s.error;
+        setButton(el.btnStart, '開始', blocked || !!s.start);
+        setButton(el.btnEnd, '終了', blocked || !!s.end);
+      }
+
+      function setButton(node, label, disabled) {
+        node.disabled = disabled;
+        node.textContent = label;
+      }
+
+      function setBusy(node, label) {
+        busy = true;
+        updateButtons();
+        node.innerHTML = '<span class="spinner"></span>' + label;
+      }
+
+      function punch(type, node, label) {
+        if (busy || node.disabled) return;
+        setBusy(node, label);
+
+        call('punch', type)
+          .then(function (result) {
+            busy = false;
+            render(result.status);
+            toast(
+              result.ok ? result.message : result.error,
+              result.ok ? 'ok' : 'ng'
+            );
+          })
+          .catch(function (err) {
+            busy = false;
+            updateButtons();
+            toast(
+              '通信に失敗しました。カレンダーを確認してから再実行してください。' +
+                (err && err.message ? '\n' + err.message : ''),
+              'ng'
+            );
+          });
+      }
+
+      function refresh() {
+        return call('getStatus')
+          .then(render)
+          .catch(function (err) {
+            el.date.textContent = '';
+            el.banner.textContent =
+              '状況を読み込めませんでした: ' +
+              (err && err.message ? err.message : '不明なエラー');
+            el.banner.classList.add('show');
+          });
+      }
+
+      el.btnStart.addEventListener('click', function () {
+        punch('start', el.btnStart, '開始');
+      });
+      el.btnEnd.addEventListener('click', function () {
+        punch('end', el.btnEnd, '終了');
+      });
+
+      // 日付を跨いだ後や、バックグラウンドから戻ったときに状態がずれないよう
+      // 再表示のたびに取り直す。
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && !busy) refresh();
+      });
+
+      refresh();
+    </script>
+  </body>
+</html>
