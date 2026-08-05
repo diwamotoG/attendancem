@@ -13,12 +13,12 @@
         --fg: #1c1c1e;
         --fg-dim: #6e6e73;
         --line: #e0e0e5;
-        --start: #0a7d3e;
-        --start-fg: #ffffff;
-        --end: #b3261e;
-        --end-fg: #ffffff;
+        --in: #0a7d3e;
+        --out: #b3261e;
+        --brk: #8a5a00;
         --disabled: #d8d8dd;
         --disabled-fg: #9a9aa0;
+        --badge-bg: #e8e8ed;
         --ok: #0a7d3e;
         --ng: #b3261e;
       }
@@ -30,10 +30,12 @@
           --fg: #f2f2f7;
           --fg-dim: #98989f;
           --line: #3a3a3c;
-          --start: #2f9e5c;
-          --end: #e5534b;
+          --in: #2f9e5c;
+          --out: #e5534b;
+          --brk: #c08a2e;
           --disabled: #3a3a3c;
           --disabled-fg: #6e6e73;
+          --badge-bg: #3a3a3c;
           --ok: #2f9e5c;
           --ng: #e5534b;
         }
@@ -45,7 +47,7 @@
 
       body {
         margin: 0;
-        padding: 20px 16px 40px;
+        padding: 16px 16px 32px;
         background: var(--bg);
         color: var(--fg);
         font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
@@ -58,66 +60,104 @@
         margin: 0 auto;
       }
 
+      /* --- ヘッダー（日付 + 現在の勤務状態）--- */
+      .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
       .date {
-        text-align: center;
         font-size: 15px;
         color: var(--fg-dim);
-        margin-bottom: 16px;
       }
 
-      /* --- 当日の打刻状況 --- */
-      .status {
+      .badge {
+        flex: none;
+        background: var(--badge-bg);
+        color: var(--fg);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .badge.on-duty {
+        background: var(--in);
+        color: #fff;
+      }
+
+      .badge.on-break {
+        background: var(--brk);
+        color: #fff;
+      }
+
+      /* --- 当日の打刻履歴 ---
+         同日に複数ペアがありうるため（F-6）、件数は固定しない。 */
+      .history {
         background: var(--card);
         border-radius: 14px;
-        padding: 4px 18px;
-        margin-bottom: 28px;
+        padding: 2px 16px;
+        margin-bottom: 24px;
       }
 
-      .status-row {
+      .punch-row {
         display: flex;
-        justify-content: space-between;
         align-items: baseline;
-        padding: 14px 0;
+        gap: 14px;
+        padding: 10px 0;
         border-bottom: 1px solid var(--line);
       }
 
-      .status-row:last-child {
+      .punch-row:last-child {
         border-bottom: none;
       }
 
-      .status-label {
-        font-size: 16px;
+      .punch-time {
+        font-size: 21px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        flex: none;
+      }
+
+      .punch-title {
+        font-size: 15px;
         color: var(--fg-dim);
       }
 
-      .status-time {
-        font-size: 26px;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .status-time.empty {
+      .history-empty {
+        padding: 16px 0;
+        text-align: center;
+        font-size: 15px;
         color: var(--disabled-fg);
-        font-weight: 400;
       }
 
-      /* --- 打刻ボタン ---
-         ADR-0011: 確認ダイアログを挟まない代わりに、誤タップを避けるため
-         2つのボタンの間に大きな余白を取る。 */
+      /* --- 打刻ボタン（ADR-0022）---
+         2列3行。min-height 88px と行間 32px は ADR-0011 の寸法を維持する。
+         列間だけ 12px に詰めて「リモート出社」が折り返さない幅を確保する。
+         押せないボタンは非表示にせず非活性にする（F-10）。位置が状態で動くと
+         指の記憶が効かず、それ自体が誤タップの原因になるため。 */
       .buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 32px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 12px;
+        row-gap: 32px;
       }
 
       button.punch {
         width: 100%;
         min-height: 88px;
+        padding: 8px;
         border: none;
         border-radius: 16px;
-        font-size: 24px;
+        /* 「リモート出社」6文字が折り返さない幅を、狭い端末でも確保する。
+           iPhone SE（幅 320px）で1ボタン約 138px、iPhone 14（390px）で約 171px。 */
+        font-size: clamp(17px, 5.1vw, 20px);
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
         color: #fff;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
@@ -134,20 +174,24 @@
         cursor: default;
       }
 
-      #btn-start {
-        background: var(--start);
+      button.punch[data-group='in'] {
+        background: var(--in);
       }
 
-      #btn-end {
-        background: var(--end);
+      button.punch[data-group='out'] {
+        background: var(--out);
+      }
+
+      button.punch[data-group='break'] {
+        background: var(--brk);
       }
 
       .spinner {
         display: inline-block;
-        width: 18px;
-        height: 18px;
-        margin-right: 10px;
-        vertical-align: -3px;
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        vertical-align: -2px;
         border: 3px solid rgba(255, 255, 255, 0.35);
         border-top-color: #fff;
         border-radius: 50%;
@@ -176,7 +220,7 @@
 
       /* --- 設定・エラー --- */
       .guests {
-        margin-top: 28px;
+        margin-top: 24px;
         text-align: center;
         font-size: 13px;
         color: var(--fg-dim);
@@ -235,24 +279,39 @@
 
   <body>
     <div class="wrap">
-      <div class="date" id="date">読み込み中…</div>
+      <div class="head">
+        <span class="date" id="date">読み込み中…</span>
+        <span class="badge" id="state">—</span>
+      </div>
 
       <div class="banner" id="banner" role="alert"></div>
 
-      <div class="status">
-        <div class="status-row">
-          <span class="status-label">開始</span>
-          <span class="status-time empty" id="time-start">—</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">終了</span>
-          <span class="status-time empty" id="time-end">—</span>
-        </div>
-      </div>
+      <div class="history" id="history"></div>
 
+      <!--
+        ボタンのラベルは PUNCH_TYPES の title と一致させる（PLAN.md §2.4）。
+        title は種別判定のキーでもあり、確定後は変更しない。
+        data-type がサーバーに渡す識別子で、allowed との突き合わせにも使う。
+      -->
       <div class="buttons">
-        <button class="punch" id="btn-start" type="button" disabled>開始</button>
-        <button class="punch" id="btn-end" type="button" disabled>終了</button>
+        <button class="punch" type="button" data-type="officeIn" data-group="in" disabled>
+          リアル出社
+        </button>
+        <button class="punch" type="button" data-type="remoteIn" data-group="in" disabled>
+          リモート出社
+        </button>
+        <button class="punch" type="button" data-type="officeOut" data-group="out" disabled>
+          リアル退社
+        </button>
+        <button class="punch" type="button" data-type="remoteOut" data-group="out" disabled>
+          リモート退社
+        </button>
+        <button class="punch" type="button" data-type="breakIn" data-group="break" disabled>
+          休憩開始
+        </button>
+        <button class="punch" type="button" data-type="breakOut" data-group="break" disabled>
+          休憩終了
+        </button>
       </div>
 
       <div class="guests" id="guests"></div>
@@ -264,19 +323,35 @@
       /**
        * クライアントロジック。
        * サーバー呼び出しは google.script.run のみ（ADR-0005）。
-       * 二重打刻の真の防壁はサーバー側にあり（ADR-0006）、
-       * ここでの非活性化は多層防御の一層目にすぎない。
+       *
+       * 打刻の可否を判断するのはサーバーだけである（ADR-0018）。
+       * ここでの非活性化は多層防御の一層目にすぎず、
+       * 遷移表をクライアントに持たない。見るのは Status.allowed だけ（PLAN.md §4.1）。
        */
 
       var el = {
         date: document.getElementById('date'),
+        state: document.getElementById('state'),
         banner: document.getElementById('banner'),
-        timeStart: document.getElementById('time-start'),
-        timeEnd: document.getElementById('time-end'),
-        btnStart: document.getElementById('btn-start'),
-        btnEnd: document.getElementById('btn-end'),
+        history: document.getElementById('history'),
         guests: document.getElementById('guests'),
         toast: document.getElementById('toast')
+      };
+
+      var buttons = Array.prototype.slice.call(
+        document.querySelectorAll('button.punch')
+      );
+
+      /** 状態の呼称。表示専用であり、遷移の判断には使わない */
+      var STATE_LABELS = {
+        offDuty: '勤務外',
+        onDuty: '勤務中',
+        onBreak: '休憩中'
+      };
+
+      var STATE_CLASSES = {
+        onDuty: 'on-duty',
+        onBreak: 'on-break'
       };
 
       var busy = false;
@@ -323,8 +398,10 @@
         lastStatus = status;
         el.date.textContent = formatDate(status.date);
 
-        setTime(el.timeStart, status.start);
-        setTime(el.timeEnd, status.end);
+        el.state.textContent = STATE_LABELS[status.state] || '—';
+        el.state.className = 'badge ' + (STATE_CLASSES[status.state] || '');
+
+        renderHistory(status.punches);
 
         if (status.error) {
           el.banner.textContent = status.error;
@@ -340,34 +417,62 @@
         updateButtons();
       }
 
-      function setTime(node, value) {
-        node.textContent = value || '—';
-        node.classList.toggle('empty', !value);
+      /**
+       * 当日の打刻履歴を描く。
+       *
+       * 履歴は当日分、状態は前日 0:00 からの窓で導出されるため、
+       * 日を跨いだ勤務では「履歴が空なのに勤務中」が正常に起こりうる。
+       * これを異常として扱わない（PLAN.md §4.1）。
+       */
+      function renderHistory(punches) {
+        el.history.textContent = '';
+
+        if (!punches || !punches.length) {
+          var empty = document.createElement('div');
+          empty.className = 'history-empty';
+          empty.textContent = '本日の打刻はまだありません';
+          el.history.appendChild(empty);
+          return;
+        }
+
+        punches.forEach(function (p) {
+          var row = document.createElement('div');
+          row.className = 'punch-row';
+
+          var time = document.createElement('span');
+          time.className = 'punch-time';
+          time.textContent = p.time;
+
+          var title = document.createElement('span');
+          title.className = 'punch-title';
+          title.textContent = p.title;
+
+          row.appendChild(time);
+          row.appendChild(title);
+          el.history.appendChild(row);
+        });
       }
 
+      /** 活性判定は allowed に含まれるかどうかだけを見る */
       function updateButtons() {
         var s = lastStatus;
         var blocked = busy || !s || !!s.error;
-        setButton(el.btnStart, '開始', blocked || !!s.start);
-        setButton(el.btnEnd, '終了', blocked || !!s.end);
+        var allowed = (s && s.allowed) || [];
+
+        buttons.forEach(function (node) {
+          node.disabled = blocked || allowed.indexOf(node.dataset.type) === -1;
+          node.textContent = node.dataset.label;
+        });
       }
 
-      function setButton(node, label, disabled) {
-        node.disabled = disabled;
-        node.textContent = label;
-      }
+      function punch(node) {
+        if (busy || node.disabled) return;
 
-      function setBusy(node, label) {
         busy = true;
         updateButtons();
-        node.innerHTML = '<span class="spinner"></span>' + label;
-      }
+        node.innerHTML = '<span class="spinner"></span>' + node.dataset.label;
 
-      function punch(type, node, label) {
-        if (busy || node.disabled) return;
-        setBusy(node, label);
-
-        call('punch', type)
+        call('punch', node.dataset.type)
           .then(function (result) {
             busy = false;
             render(result.status);
@@ -399,11 +504,13 @@
           });
       }
 
-      el.btnStart.addEventListener('click', function () {
-        punch('start', el.btnStart, '開始');
-      });
-      el.btnEnd.addEventListener('click', function () {
-        punch('end', el.btnEnd, '終了');
+      buttons.forEach(function (node) {
+        // HTML 側のラベルを正とし、スピナー表示から戻すときの復元元にする
+        node.dataset.label = node.textContent.trim();
+        node.textContent = node.dataset.label;
+        node.addEventListener('click', function () {
+          punch(node);
+        });
       });
 
       // 日付を跨いだ後や、バックグラウンドから戻ったときに状態がずれないよう
