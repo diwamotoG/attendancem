@@ -243,7 +243,9 @@ rm -rf "$TMP"
 
 ---
 
-## ステップ 6 — 🔴 STOP: 招待先を設定する（人間）
+## ステップ 6 — 🔴 STOP: 招待先と氏名を設定する（人間）
+
+### 6-1. 招待先（Script Properties）
 
 ユーザーに以下を依頼する。
 
@@ -265,6 +267,28 @@ rm -rf "$TMP"
 `Config.gs` の `setupGuests(csv)` はプログラム設定用のヘルパーだが、
 **GAS エディタの「実行」は引数を渡せないため、この手順では使えない。**
 
+### 6-2. 氏名（User Properties）
+
+打刻のタイトルは `{種別名}_{氏名}` 形式であり、**氏名が未設定だと打刻できない**
+（[ADR-0023](./ADR.md#adr-0023) / [ADR-0024](./ADR.md#adr-0024)）。
+氏名は **User Properties** に入るため、**「プロジェクトの設定」の画面には現れない。**
+6-1 と同じ画面を探しても見つからないので注意すること。
+
+ユーザーに以下を依頼する。
+
+> GAS エディタの **デプロイ > デプロイをテスト** で表示される URL（`/dev` で終わる）を
+> 開き、画面上部の入力欄に氏名を入力して保存してください。
+>
+> - 20文字以内。改行・タブは使えない
+> - 前後の空白は自動で除去される
+> - 本番デプロイ（ステップ8）はまだ不要です
+
+**ステップ7の打刻確認より先に済ませること。** 氏名が未設定だと
+`testPunchOfficeIn()` などが `ok: false` を返し、イベントが作成されない。
+
+`Config.gs` の `setupDisplayName(name)` はプログラム設定用のヘルパーだが、
+`setupGuests(csv)` と同じ理由で **GAS エディタからは実行できない。**
+
 ---
 
 ## ステップ 7 — 🔴 STOP: 動作確認（人間・GAS エディタ）
@@ -285,11 +309,12 @@ Gmail・ドライブなどが並んでいたらマニフェストの宣言と食
 
 ```json
 { "date": "YYYY-MM-DD", "punches": [], "state": "offDuty",
-  "allowed": ["officeIn", "remoteIn"],
+  "allowed": ["officeIn", "remoteIn"], "displayName": "山田太郎",
   "guests": ["1人目@gmail.com", "2人目@gmail.com"], "error": null }
 ```
 
-`error` が `null` で `guests` が2件揃うこと。
+`error` が `null`、`guests` が2件、`displayName` にステップ 6-2 で設定した氏名が
+入っていること。`displayName` が `null` なら 6-2 に戻る。
 当日の打刻がまだ無ければ `punches` は空配列、`state` は `offDuty` になる。
 
 ### 7-2. `testTransitions()`
@@ -307,7 +332,21 @@ testTransitions: 31/31 件合格、失敗 0 件
 PLAN.md §2.4 の遷移表と `Config.gs` の `PUNCH_TYPES`（`from` / `to`）の
 どちらが食い違っているかを報告すること。
 
-### 7-3. 打刻のラッパー関数
+### 7-3. `testTitles()`
+
+タイトルの生成と種別判定を検証する自動テスト（PLAN.md §6.1）。
+`testTransitions()` と同じくカレンダーにも招待メールにも触れない。
+
+期待するログ:
+
+```
+testTitles: N/N 件合格、失敗 0 件
+```
+
+`失敗 0 件` でなければ次へ進まない。`NG` 行が出たら、PLAN.md §2.4 の判定表と
+`Code.gs` の `typeOfTitle()` / `buildEventTitle()` のどちらが食い違っているかを報告する。
+
+### 7-4. 打刻のラッパー関数
 
 > ⚠️ **実行するとカレンダーに予定が作られ、出社・退社は招待先2名に実際にメールが届く。**
 > `GUEST_EMAILS` にプレースホルダ（`a@gmail.com` など実在する他人のアドレス）が
@@ -317,18 +356,20 @@ PLAN.md §2.4 の遷移表と `Config.gs` の `PUNCH_TYPES`（`from` / `to`）�
 
 | # | 関数 | 期待結果 |
 |---|------|---------|
-| 1 | `testPunchOfficeIn()` | `リアル出社` が現在時刻で作成、2名に招待メール |
-| 2 | `testPunchBreakIn()` | `休憩開始` が作成。**招待メールは届かない** |
-| 3 | `testPunchBreakOut()` | `休憩終了` が作成。招待メールは届かない |
-| 4 | `testPunchOfficeOut()` | `リアル退社` が作成、2名に招待メール |
+| 1 | `testPunchOfficeIn()` | `リアル出社_{氏名}` が現在時刻で作成、2名に招待メール |
+| 2 | `testPunchBreakIn()` | `休憩開始_{氏名}` が作成。**招待メールは届かない** |
+| 3 | `testPunchBreakOut()` | `休憩終了_{氏名}` が作成。招待メールは届かない |
+| 4 | `testPunchOfficeOut()` | `リアル退社_{氏名}` が作成、2名に招待メール |
 
 `testPunchRemoteIn()` / `testPunchRemoteOut()` も同じ要領で確認できる
-（それぞれ `リモート出社` / `リモート退社` が作成され、2名に招待メールが届く）。
+（それぞれ `リモート出社_{氏名}` / `リモート退社_{氏名}` が作成され、2名に招待メールが届く）。
 引数付きの `punch('officeIn')` はエディタから直接実行できないため、
 ラッパー関数を使う（PLAN.md §5 Phase 1）。
 
-**2つの制約に注意すること。** どちらも仕様であり、故障ではない。
+**3つの制約に注意すること。** いずれも仕様であり、故障ではない。
 
+- **氏名**: 未設定だと種別を問わず拒否され、`氏名が未設定です` が返る。
+  ステップ 6-2 に戻る（[ADR-0024](./ADR.md#adr-0024)）
 - **順序**: 勤務外の状態で `testPunchOfficeOut()` を実行しても、
   状態遷移チェックに弾かれて `ok: false` が返りイベントは作成されない
   （[ADR-0018](./ADR.md#adr-0018)）。上の表の順に実行する
@@ -381,9 +422,10 @@ PLAN.md §2.4 の遷移表と `Config.gs` の `PUNCH_TYPES`（`from` / `to`）�
 - [ ] `~/.clasprc.json` が存在しない（認証情報がリポジトリ内に閉じている）
 - [ ] `src/appsscript.json` が `Asia/Tokyo` / `webapp` / `oauthScopes` の3点を保持
 - [ ] GAS 側のマニフェストがローカルと一致
-- [ ] `checkConfig()` が `error: null`、`guests` 2件
+- [ ] `checkConfig()` が `error: null`、`guests` 2件、`displayName` に氏名
 - [ ] `testTransitions()` が `失敗 0 件`
-- [ ] `testPunchOfficeIn()` / `testPunchOfficeOut()` でカレンダーに予定と招待メール
+- [ ] `testTitles()` が `失敗 0 件`
+- [ ] `testPunchOfficeIn()` / `testPunchOfficeOut()` でカレンダーに `{種別名}_{氏名}` の予定と招待メール
 - [ ] `testPunchBreakIn()` / `testPunchBreakOut()` でカレンダーに予定。**招待メールは届かない**
 - [ ] Web App が「自分として実行 / 自分のみアクセス」でデプロイ済み
 - [ ] ホーム画面から2タップで打刻できる
@@ -400,6 +442,8 @@ PLAN.md §2.4 の遷移表と `Config.gs` の `PUNCH_TYPES`（`from` / `to`）�
 | push したのにマニフェストが変わらない | `--force` を付けていない。`npm run push -- --force` |
 | `Not logged in.` が出る | 素の `npx clasp` を叩いている。npm scripts 経由で実行する |
 | 打刻時刻が9時間ずれる | ステップ4の上書きが起きている。検証ゲートに戻る |
+| `checkConfig()` の `displayName` が `null` | ステップ 6-2 を実施していない。**「プロジェクトの設定」の画面には現れない**。`/dev` の URL を開いて入力する |
+| 打刻が `氏名が未設定です` で拒否される | 同上 |
 
 ---
 
