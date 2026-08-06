@@ -8,6 +8,31 @@
 /** Script Properties のキー: 招待先メールアドレス（カンマ区切り） */
 const PROP_GUEST_EMAILS = 'GUEST_EMAILS';
 
+/**
+ * User Properties のキー: 打刻タイトルに載せる氏名（ADR-0024）。
+ *
+ * Script Properties ではなく User Properties に置く。
+ * 実行主体ごとのバケットであるため、#9 が executeAs を USER_ACCESSING に
+ * 切り替えた時点で自動的に利用者ごとに分かれる。
+ * 現状の USER_DEPLOYING では実行主体が常にデプロイ者であり、バケットは1つしかない。
+ *
+ * GAS エディタの「プロジェクトの設定」からは見えない。
+ * 確認は checkConfig()、設定は画面の入力欄か setupDisplayName() で行う。
+ */
+const PROP_DISPLAY_NAME = 'DISPLAY_NAME';
+
+/**
+ * 種別名と氏名の区切り文字（ADR-0023）。
+ *
+ * カレンダー上のタイトルは `{種別名}{TITLE_SEPARATOR}{氏名}` になる。
+ * PUNCH_TYPES の title にこの文字を含めてはならない。
+ * 分割位置が種別名の内部に来て種別判定が壊れる（PLAN.md §2.4）。
+ */
+const TITLE_SEPARATOR = '_';
+
+/** 氏名の文字数上限。カレンダーのタイトルに載るため制限する（PLAN.md §4.1） */
+const DISPLAY_NAME_MAX_LENGTH = 20;
+
 /** 打刻イベントの長さ（ミリ秒）。長さ0は表示が不安定なため1分とする（ADR-0008） */
 const EVENT_DURATION_MS = 60 * 1000;
 
@@ -46,9 +71,12 @@ const INITIAL_STATE = STATE_OFF_DUTY;
 /**
  * 打刻種別の定義（ADR-0017）。
  *
- * key はクライアントから punch() に渡す識別子、title はカレンダー上のイベント名。
+ * key はクライアントから punch() に渡す識別子、title は**種別名**である。
+ * カレンダー上のイベント名は `{title}_{氏名}` であり、title そのものではない（ADR-0023）。
  * title は履歴表示と状態導出の両方で種別判定のキーになるため、
  * 変更すると過去の打刻がどちらにも現れなくなる。
+ *
+ * title に TITLE_SEPARATOR（'_'）を含めてはならない。
  *
  * from / to が PLAN.md §2.4 の遷移表そのものである。
  * 種別の追加時に定義と遷移の更新漏れが起きないよう、同じ場所に持たせている。
@@ -167,4 +195,70 @@ function setupGuests(csv) {
   }
   PropertiesService.getScriptProperties().setProperty(PROP_GUEST_EMAILS, emails.join(','));
   return emails;
+}
+
+/**
+ * 氏名の検証と正規化（PLAN.md §4.1）。
+ *
+ * 値はそのままカレンダーのタイトルに載るため、保存前に必ず通す。
+ * PropertiesService に触れない純粋関数であり、testTitles() から直接検証できる。
+ *
+ * TITLE_SEPARATOR を含む氏名は許容する。種別判定は最初の区切りだけを見るため、
+ * 氏名側の '_' は後半に残るだけで影響しない（ADR-0023）。
+ *
+ * @param {string} raw 入力値
+ * @return {{ok: boolean, name?: string, error?: string}}
+ */
+function validateDisplayName(raw) {
+  const name = String(raw == null ? '' : raw).trim();
+
+  if (name.length === 0) {
+    return { ok: false, error: '氏名を入力してください' };
+  }
+  // 制御文字。タイトルに改行が入るとカレンダー上の表示が壊れる
+  if (/[\u0000-\u001F\u007F]/.test(name)) {
+    return { ok: false, error: '氏名に改行やタブは使えません' };
+  }
+  if (name.length > DISPLAY_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: '氏名は' + DISPLAY_NAME_MAX_LENGTH + '文字以内で入力してください',
+    };
+  }
+  return { ok: true, name: name };
+}
+
+/**
+ * 氏名を返す。未設定なら null。
+ *
+ * getGuestEmails() と異なり例外を投げない。
+ * getStatus() が displayName に null を詰めて返せるようにするため。
+ *
+ * @return {?string}
+ */
+function getDisplayName() {
+  const raw = PropertiesService.getUserProperties().getProperty(PROP_DISPLAY_NAME);
+  const name = String(raw == null ? '' : raw).trim();
+  return name.length > 0 ? name : null;
+}
+
+/**
+ * 氏名を保存する。
+ *
+ * 通常は画面の入力欄から setDisplayName()（Code.gs）経由で呼ばれる。
+ * この関数は clasp 経由などでプログラム的に設定したい場合に使う。
+ * User Properties には GAS エディタの一覧 UI が無いため、
+ * 「プロジェクトの設定」から手で設定することはできない（ADR-0024）。
+ *
+ * @param {string} name 例: '山田太郎'
+ * @return {string} 保存した氏名
+ * @throws {Error} 検証に失敗した場合
+ */
+function setupDisplayName(name) {
+  const result = validateDisplayName(name);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  PropertiesService.getUserProperties().setProperty(PROP_DISPLAY_NAME, result.name);
+  return result.name;
 }

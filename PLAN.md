@@ -494,11 +494,14 @@ push とデプロイは分離されているため（DEPLOY.md）、`#4` が揃�
 本ドキュメントの §2.1 / §2.4 / §3.2 / §4.1 / §4.2 / §4.3 / §6 / §7 が改訂の対象。
 
 - [x] 仕様・設計の決定（本改訂と ADR-0023 / ADR-0024） — [#10](https://github.com/diwamotoG/attendancem/issues/10)
-- [ ] `Config.gs` — `TITLE_SEPARATOR` / `DISPLAY_NAME_MAX_LENGTH`、氏名の読み書きと検証
-- [ ] `Code.gs` — `buildEventTitle()`、`typeOfTitle()` の判定置き換え、`setDisplayName()`、`punch()` の氏名ゲート
-- [ ] `index.html` — 氏名の入力欄と未設定時のバナー
-- [ ] `testTitles()` の新設（§6.1）と T-21〜T-24 の実行（§6.2）
-- [ ] README / SETUP / DEPLOY の更新
+- [x] `Config.gs` — `TITLE_SEPARATOR` / `DISPLAY_NAME_MAX_LENGTH`、氏名の読み書きと検証
+- [x] `Code.gs` — `buildEventTitle()`、`typeOfTitle()` の判定置き換え、`setDisplayName()`、`punch()` の氏名ゲート
+- [x] `index.html` — 氏名の入力欄と未設定時のバナー
+- [x] `testTitles()` の新設（§6.1）
+- [x] README / SETUP / DEPLOY の更新
+- [ ] `testTransitions()` / `testTitles()` を GAS エディタで実行（§6.1）
+- [ ] T-21〜T-24 の実行（§6.2）
+- [ ] 本番反映（**勤務外の状態で行う**）
 
 **完了条件**: 打刻するとカレンダーに `{種別名}_{氏名}` でイベントが作成され、
 そのイベントが履歴表示と状態導出の両方で従来どおり打刻として認識される。
@@ -531,6 +534,7 @@ push とデプロイは分離されているため（DEPLOY.md）、`#4` が揃�
 | `deriveState(types)` | 打刻 `type` の配列（時刻昇順） | 到達した状態 | 純粋 |
 | `buildEventTitle(def, name)` | 種別定義と氏名 | カレンダー上のタイトル | 純粋 |
 | `typeOfTitle(title)` | カレンダー上のタイトル | `type` または `null` | 純粋 |
+| `validateDisplayName(raw)` | 氏名の入力値 | `{ok, name}` または `{ok, error}` | 純粋 |
 
 いずれも `CalendarApp` / `PropertiesService` / `new Date()` に触れない。
 これが自動テストを成立させる条件であり、**実装はこの分離を守ること**。
@@ -563,8 +567,9 @@ User Properties を読みに行くと純粋性が壊れ、自動テストの対�
 | 部分一致 | `リアル出社について_議事録` | `null` |
 | 打刻外 | `定例MTG_山田太郎` / `ミーティング` | `null` |
 | 種別名を含む氏名 | `休憩開始_リアル出社` | `breakIn`（分割は最初の `_` のみ） |
+| 氏名の検証 | `validateDisplayName()` に空文字・空白のみ・改行・タブ・上限超過 | いずれも `ok: false` |
 
-最後の観点が、前方一致ではなく分割 + 完全一致を採ったことの検証にあたる。
+「種別名を含む氏名」が、前方一致ではなく分割 + 完全一致を採ったことの検証にあたる。
 
 ### 6.2 手動検証
 
