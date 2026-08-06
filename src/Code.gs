@@ -35,7 +35,7 @@ function doGet() {
  * 窓が異なるため、日跨ぎ勤務では「履歴が空なのに state が onDuty」が正常に起こりうる。
  *
  * @return {{date: string, punches: Object[], state: string, allowed: string[],
- *           guests: string[], error: ?string}}
+ *           displayName: ?string, guests: string[], error: ?string}}
  */
 function getStatus() {
   const now = new Date();
@@ -44,6 +44,7 @@ function getStatus() {
     punches: [],
     state: INITIAL_STATE,
     allowed: getAllowedTypes(INITIAL_STATE),
+    displayName: null,
     guests: [],
     error: null,
   };
@@ -52,6 +53,12 @@ function getStatus() {
     status.guests = getGuestEmails();
   } catch (e) {
     status.error = e.message;
+  }
+
+  try {
+    status.displayName = getDisplayName();
+  } catch (e) {
+    status.error = status.error || '氏名の読み込みに失敗しました: ' + e.message;
   }
 
   try {
@@ -77,7 +84,7 @@ function getStatus() {
  * 両方が作成に進む競合を防ぐのは排他だけである（ADR-0018 の決定2）。
  *
  * 判定順は PLAN.md §4.1 のとおり
- * 種別 → 招待先 → ロック → 連打しきい値 → 状態遷移 とする。
+ * 種別 → 招待先 → 氏名 → ロック → 連打しきい値 → 状態遷移 とする。
  *
  * @param {string} type PUNCH_TYPES のキー（PLAN.md §2.4 の6種別）
  * @return {{ok: boolean, message?: string, error?: string, status: Object}}
@@ -93,6 +100,23 @@ function punch(type) {
     guests = getGuestEmails();
   } catch (e) {
     return { ok: false, error: e.message, status: getStatus() };
+  }
+
+  // 氏名が無いまま作成すると、typeOfTitle() が打刻として認識しないタイトルになり、
+  // 作成した本人が履歴でも状態導出でも見つけられない（ADR-0023 / ADR-0024）。
+  // 「氏名なしで打刻する」は選べない。
+  let displayName;
+  try {
+    displayName = getDisplayName();
+  } catch (e) {
+    return { ok: false, error: '氏名の読み込みに失敗しました: ' + e.message, status: getStatus() };
+  }
+  if (!displayName) {
+    return {
+      ok: false,
+      error: '氏名が未設定です。画面の設定欄から氏名を登録してください',
+      status: getStatus(),
+    };
   }
 
   const lock = LockService.getScriptLock();
@@ -132,8 +156,9 @@ function punch(type) {
       };
     }
 
+    const title = buildEventTitle(def, displayName);
     getCalendar().createEvent(
-      def.title,
+      title,
       now,
       new Date(now.getTime() + EVENT_DURATION_MS),
       {
@@ -144,7 +169,7 @@ function punch(type) {
 
     return {
       ok: true,
-      message: '「' + def.title + '」を ' + formatTime(now) + ' で登録しました',
+      message: '「' + title + '」を ' + formatTime(now) + ' で登録しました',
       status: getStatus(),
     };
   } catch (e) {
@@ -154,13 +179,48 @@ function punch(type) {
   }
 }
 
+/**
+ * 氏名を保存する。画面の入力欄から呼ばれる（PLAN.md §4.1 / ADR-0024）。
+ *
+ * punch() と同じく例外を投げず、ok フラグで結果を表現する。
+ * 検証は validateDisplayName()（Config.gs）に集約してある。
+ * 値はそのままカレンダーのタイトルに載るため、クライアント側の検証を信用しない。
+ *
+ * 過去のイベントのタイトルは書き換えない。
+ * カレンダーが唯一の記録先であり、ツールが過去の記録を遡って変更しない方針を維持する。
+ *
+ * @param {string} name
+ * @return {{ok: boolean, message?: string, error?: string, status: Object}}
+ */
+function setDisplayName(name) {
+  const result = validateDisplayName(name);
+  if (!result.ok) {
+    return { ok: false, error: result.error, status: getStatus() };
+  }
+
+  try {
+    PropertiesService.getUserProperties().setProperty(PROP_DISPLAY_NAME, result.name);
+  } catch (e) {
+    return { ok: false, error: '氏名の保存に失敗しました: ' + e.message, status: getStatus() };
+  }
+
+  return {
+    ok: true,
+    message: '氏名を「' + result.name + '」に設定しました',
+    status: getStatus(),
+  };
+}
+
 // ---------------------------------------------------------------------------
-// 状態遷移（純粋関数）
+// 状態遷移とタイトル（純粋関数）
 //
 // このセクションの関数は CalendarApp / PropertiesService / new Date() に触れない。
-// これが testTransitions() による自動検証が成立する条件であり、
+// これが testTransitions() / testTitles() による自動検証が成立する条件であり、
 // ADR-0021 が punch() に課した制約でもある。遷移の判定をここから
 // punch() の中に移すと、テストは通るのに本番が壊れる状態になりうる。
+//
+// 氏名は引数で受け取る。buildEventTitle() が getDisplayName() を呼ぶと
+// User Properties に依存して純粋性が壊れ、自動テストの対象から外れる（PLAN.md §6.1）。
 // ---------------------------------------------------------------------------
 
 /**
@@ -210,6 +270,49 @@ function deriveState(types) {
  */
 function getPunchType(type) {
   return Object.prototype.hasOwnProperty.call(PUNCH_TYPES, type) ? PUNCH_TYPES[type] : null;
+}
+
+/**
+ * カレンダー上のイベントタイトルを組み立てる（ADR-0023）。
+ *
+ * @param {Object} def PUNCH_TYPES の要素
+ * @param {string} name 氏名。validateDisplayName() を通った値であること
+ * @return {string} 例: 'リアル出社_山田太郎'
+ */
+function buildEventTitle(def, name) {
+  return def.title + TITLE_SEPARATOR + name;
+}
+
+/**
+ * イベントタイトルから打刻種別を引く（ADR-0023 / PLAN.md §2.4）。
+ *
+ * タイトルを最初の TITLE_SEPARATOR で1回だけ分割し、
+ * 前半が種別名と完全一致するかで判定する。**前方一致では判定しない。**
+ * 分割してから完全一致するため、種別部分の判定強度は ADR-0017 と同じである。
+ *
+ * 区切りを含まない旧形式（氏名なし）は打刻として認識しない。移行もしない。
+ * 区切りより後ろが空のタイトルも打刻ではない。
+ *
+ * @return {?string} PUNCH_TYPES のキー。打刻イベントでなければ null
+ */
+function typeOfTitle(title) {
+  const raw = String(title == null ? '' : title);
+  const at = raw.indexOf(TITLE_SEPARATOR);
+
+  // at === -1: 区切りが無い（旧形式）
+  // at === 0: 前半が空
+  // at === raw.length - 1: 後半（氏名）が空
+  if (at <= 0 || at === raw.length - 1) {
+    return null;
+  }
+
+  const head = raw.slice(0, at);
+  for (const key in PUNCH_TYPES) {
+    if (PUNCH_TYPES[key].title === head) {
+      return key;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,21 +395,6 @@ function toTypes(punches) {
   return punches.map(function (p) {
     return p.type;
   });
-}
-
-/**
- * イベントタイトルから打刻種別を引く。判定キーはタイトルの完全一致。
- * 改訂前の「開始」「終了」はどの種別にも一致しない（ADR-0017）。
- *
- * @return {?string} PUNCH_TYPES のキー。打刻イベントでなければ null
- */
-function typeOfTitle(title) {
-  for (const key in PUNCH_TYPES) {
-    if (PUNCH_TYPES[key].title === title) {
-      return key;
-    }
-  }
-  return null;
 }
 
 /** 時刻を JST の 'HH:mm' に整形する（ADR-0007） */
@@ -405,6 +493,100 @@ function testTransitions() {
 
   Logger.log(
     'testTransitions: ' + (total - failures.length) + '/' + total +
+      ' 件合格、失敗 ' + failures.length + ' 件'
+  );
+  failures.forEach(function (f) {
+    Logger.log('  NG ' + f);
+  });
+
+  return { total: total, failed: failures.length, failures: failures };
+}
+
+/**
+ * タイトルの生成と種別判定の自動テスト（PLAN.md §6.1 / ADR-0023）。
+ *
+ * カレンダーにも User Properties にも触れず、純粋関数だけを検証する。
+ * 期待値は PLAN.md §2.4 の判定表を手で写したものである。
+ *
+ * 改修前の testTransitions() はタイトル判定を一切検証していなかった。
+ * 判定規則が完全一致から「分割 + 完全一致」に変わり誤判定の余地が増えたため新設した。
+ *
+ * @return {{total: number, failed: number, failures: string[]}}
+ */
+function testTitles() {
+  const failures = [];
+  let total = 0;
+
+  function check(label, actual, expected) {
+    total++;
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) {
+      failures.push(label + ' — 期待: ' + e + ' / 実際: ' + a);
+    }
+  }
+
+  const NAME = '山田太郎';
+
+  // --- 生成 ---
+  check(
+    'buildEventTitle(officeIn)',
+    buildEventTitle(PUNCH_TYPES.officeIn, NAME),
+    'リアル出社_' + NAME
+  );
+  check(
+    'buildEventTitle(breakOut)',
+    buildEventTitle(PUNCH_TYPES.breakOut, NAME),
+    '休憩終了_' + NAME
+  );
+
+  // --- 往復: 6種別すべてで 生成 → 判定 が元の type に戻る ---
+  ['officeIn', 'remoteIn', 'officeOut', 'remoteOut', 'breakIn', 'breakOut'].forEach(
+    function (key) {
+      check(
+        '往復(' + key + ')',
+        typeOfTitle(buildEventTitle(PUNCH_TYPES[key], NAME)),
+        key
+      );
+    }
+  );
+
+  // --- PLAN.md §2.4 の判定表の写し ---
+  check('氏名に区切りを含む', typeOfTitle('リアル出社_山田_太郎'), 'officeIn');
+  check('旧形式（氏名なし）', typeOfTitle('リアル出社'), null);
+  check('氏名が空', typeOfTitle('リアル出社_'), null);
+  check('種別名が空', typeOfTitle('_山田太郎'), null);
+  check('部分一致は拾わない', typeOfTitle('リアル出社について_議事録'), null);
+  check('打刻外（区切りあり）', typeOfTitle('定例MTG_山田太郎'), null);
+  check('打刻外（区切りなし）', typeOfTitle('ミーティング'), null);
+  check('改訂前の開始', typeOfTitle('開始'), null);
+  check('空文字', typeOfTitle(''), null);
+  check('null', typeOfTitle(null), null);
+
+  // 分割は最初の区切りのみ。前方一致ではなく分割 + 完全一致であることの検証
+  check('氏名が種別名と同じ', typeOfTitle('休憩開始_リアル出社'), 'breakIn');
+
+  // --- validateDisplayName（PLAN.md §4.1 の検証規則） ---
+  check('氏名: 前後の空白を除去', validateDisplayName('  山田太郎  ').name, '山田太郎');
+  check('氏名: 区切りを含んでよい', validateDisplayName('山田_太郎').ok, true);
+  check('氏名: 空文字は拒否', validateDisplayName('').ok, false);
+  check('氏名: 空白のみは拒否', validateDisplayName('   ').ok, false);
+  check('氏名: null は拒否', validateDisplayName(null).ok, false);
+  check('氏名: 改行を含むと拒否', validateDisplayName('山田\n太郎').ok, false);
+  check('氏名: タブを含むと拒否', validateDisplayName('山田\t太郎').ok, false);
+  check(
+    '氏名: 上限ちょうどは許可',
+    validateDisplayName('あ'.repeat(DISPLAY_NAME_MAX_LENGTH)).ok,
+    true
+  );
+  check(
+    '氏名: 上限超過は拒否',
+    validateDisplayName('あ'.repeat(DISPLAY_NAME_MAX_LENGTH + 1)).ok,
+    false
+  );
+
+  Logger.log(
+    'testTitles: ' + (total - failures.length) + '/' + total +
       ' 件合格、失敗 ' + failures.length + ' 件'
   );
   failures.forEach(function (f) {

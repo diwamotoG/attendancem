@@ -218,6 +218,104 @@
         }
       }
 
+      /* --- 氏名（ADR-0024）---
+         未設定だと打刻できないため、設定前だけカード状に目立たせる。
+         設定後は1行の控えめな表示に畳む。 */
+      .name {
+        margin-bottom: 24px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--fg-dim);
+      }
+
+      .name.unset {
+        background: var(--card);
+        border: 1px solid var(--brk);
+        border-radius: 12px;
+        padding: 14px 16px;
+        text-align: left;
+        font-size: 14px;
+        color: var(--fg);
+      }
+
+      .name-note {
+        display: none;
+        margin-bottom: 10px;
+        line-height: 1.6;
+      }
+
+      .name.unset .name-note {
+        display: block;
+      }
+
+      .name-view {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .name.unset .name-view,
+      .name.editing .name-view {
+        display: none;
+      }
+
+      .name-form {
+        display: none;
+        gap: 8px;
+      }
+
+      .name.unset .name-form,
+      .name.editing .name-form {
+        display: flex;
+      }
+
+      .name-form input {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 44px;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: inherit;
+        /* 16px 未満だと iOS Safari がフォーカス時にページを拡大する */
+        font-size: 16px;
+      }
+
+      .name-form button {
+        flex: none;
+        min-height: 44px;
+        padding: 8px 18px;
+        border: none;
+        border-radius: 10px;
+        background: var(--badge-bg);
+        color: var(--fg);
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .name-form button:disabled {
+        color: var(--disabled-fg);
+        cursor: default;
+      }
+
+      button.link {
+        padding: 2px 6px;
+        border: none;
+        background: none;
+        color: var(--fg-dim);
+        font-family: inherit;
+        font-size: 13px;
+        text-decoration: underline;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
       /* --- 設定・エラー --- */
       .guests {
         margin-top: 24px;
@@ -289,6 +387,34 @@
       <div class="history" id="history"></div>
 
       <!--
+        氏名（ADR-0024）。未設定では打刻できないため、ボタンの直前に置く。
+        maxlength は Config.gs の DISPLAY_NAME_MAX_LENGTH と揃えた入力補助であり、
+        検証の正はサーバー側の validateDisplayName() にある。
+      -->
+      <div class="name" id="name">
+        <div class="name-note">
+          打刻するには氏名の設定が必要です。カレンダーには
+          「リアル出社_山田太郎」のように記録されます。
+        </div>
+        <div class="name-view">
+          <span id="nameLabel"></span>
+          <button class="link" type="button" id="nameEdit">変更</button>
+        </div>
+        <div class="name-form">
+          <input
+            type="text"
+            id="nameInput"
+            maxlength="20"
+            placeholder="氏名（例: 山田太郎）"
+            autocomplete="name"
+            enterkeyhint="done"
+            aria-label="氏名"
+          />
+          <button type="button" id="nameSave">保存</button>
+        </div>
+      </div>
+
+      <!--
         ボタンのラベルは PUNCH_TYPES の title と一致させる（PLAN.md §2.4）。
         title は種別判定のキーでもあり、確定後は変更しない。
         data-type がサーバーに渡す識別子で、allowed との突き合わせにも使う。
@@ -334,6 +460,11 @@
         state: document.getElementById('state'),
         banner: document.getElementById('banner'),
         history: document.getElementById('history'),
+        name: document.getElementById('name'),
+        nameLabel: document.getElementById('nameLabel'),
+        nameEdit: document.getElementById('nameEdit'),
+        nameInput: document.getElementById('nameInput'),
+        nameSave: document.getElementById('nameSave'),
         guests: document.getElementById('guests'),
         toast: document.getElementById('toast')
       };
@@ -357,6 +488,9 @@
       var busy = false;
       var lastStatus = null;
       var toastTimer = null;
+
+      // 氏名の入力欄を開いているか。開いている間は再描画で入力中の値を上書きしない
+      var editingName = false;
 
       /**
        * google.script.run をコールバックから Promise に包む。
@@ -410,11 +544,68 @@
           el.banner.classList.remove('show');
         }
 
+        renderName(status.displayName);
+
         el.guests.textContent = status.guests && status.guests.length
           ? '招待先: ' + status.guests.join(' / ')
           : '';
 
         updateButtons();
+      }
+
+      /**
+       * 氏名の表示を切り替える（ADR-0024）。
+       *
+       * 未設定なら入力欄を開いたまま目立たせる。打刻できない状態だからである。
+       * 入力中は value を触らない。再描画のたびに打ちかけの文字が消えるのを避ける。
+       */
+      function renderName(displayName) {
+        el.name.classList.toggle('unset', !displayName);
+        el.nameLabel.textContent = displayName ? '氏名: ' + displayName : '';
+
+        if (!editingName) {
+          el.nameInput.value = displayName || '';
+        }
+      }
+
+      function openNameEditor() {
+        editingName = true;
+        el.name.classList.add('editing');
+        el.nameInput.value = (lastStatus && lastStatus.displayName) || '';
+        el.nameInput.focus();
+      }
+
+      function saveName() {
+        if (busy) return;
+
+        busy = true;
+        el.nameSave.disabled = true;
+        updateButtons();
+
+        call('setDisplayName', el.nameInput.value)
+          .then(function (result) {
+            busy = false;
+            el.nameSave.disabled = false;
+            if (result.ok) {
+              editingName = false;
+              el.name.classList.remove('editing');
+            }
+            render(result.status);
+            toast(
+              result.ok ? result.message : result.error,
+              result.ok ? 'ok' : 'ng'
+            );
+          })
+          .catch(function (err) {
+            busy = false;
+            el.nameSave.disabled = false;
+            updateButtons();
+            toast(
+              '氏名を保存できませんでした。' +
+                (err && err.message ? '\n' + err.message : ''),
+              'ng'
+            );
+          });
       }
 
       /**
@@ -453,10 +644,14 @@
         });
       }
 
-      /** 活性判定は allowed に含まれるかどうかだけを見る */
+      /**
+       * 活性判定は allowed に含まれるかどうかだけを見る。
+       * ただし設定不足（招待先・氏名）はどの種別も打刻できないため、
+       * allowed を見るより前に全ボタンを止める（F-14 / ADR-0024）。
+       */
       function updateButtons() {
         var s = lastStatus;
-        var blocked = busy || !s || !!s.error;
+        var blocked = busy || !s || !!s.error || !s.displayName;
         var allowed = (s && s.allowed) || [];
 
         buttons.forEach(function (node) {
@@ -513,10 +708,19 @@
         });
       });
 
+      el.nameEdit.addEventListener('click', openNameEditor);
+      el.nameSave.addEventListener('click', saveName);
+      el.nameInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveName();
+        }
+      });
+
       // 日付を跨いだ後や、バックグラウンドから戻ったときに状態がずれないよう
-      // 再表示のたびに取り直す。
+      // 再表示のたびに取り直す。入力中は取り直さない（打ちかけの値が消えるため）。
       document.addEventListener('visibilitychange', function () {
-        if (!document.hidden && !busy) refresh();
+        if (!document.hidden && !busy && !editingName) refresh();
       });
 
       refresh();
