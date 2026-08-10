@@ -128,6 +128,8 @@ rm -rf node_modules package-lock.json .clasprc.json .clasp.json
 
 カンマ区切り。空白は自動で除去される。
 メールアドレスはソースコードに書かない（[ADR-0009](./ADR.md#adr-0009)）。
+**この打刻ツールを使うアカウントを招待先に入れてはならない**（自分の別アカウントを含む。
+→ [ADR-0025](./ADR.md#adr-0025)）。
 
 ### 3. 氏名を設定する
 
