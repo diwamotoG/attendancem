@@ -301,8 +301,9 @@ function typeOfTitle(title) {
 
   // at === -1: 区切りが無い（旧形式）
   // at === 0: 前半が空
-  // at === raw.length - 1: 後半（氏名）が空
-  if (at <= 0 || at === raw.length - 1) {
+  // 区切りの直後で終わる: 後半（氏名）が空
+  // 長さで判定するのは TITLE_SEPARATOR が2文字以上でも成り立たせるため
+  if (at <= 0 || at + TITLE_SEPARATOR.length >= raw.length) {
     return null;
   }
 
